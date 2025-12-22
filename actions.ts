@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { unstable_noStore as noStore } from "next/cache"; 
-import connectDB from "../../l2/ltrack2/lib/db";
+import connectDB from "@/lib/db";
 import { Domain, Task, TaskLog, GameSettings, DailyHistory } from "@/models/Core";
-import { BADGES } from "../../l2/ltrack2/lib/badgeRules";
+import { BADGES } from "@/lib/badgeRules";
 
 // --- HELPER: Global Date Source of Truth ---
 // Returns "YYYY-MM-DD" based on UTC (which is 5:30 AM IST)

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { ArrowLeft, Lock, Coins, RotateCcw } from "lucide-react";
-import { getLegacyData, resetWallet } from "../../actions";
-import { BADGES } from "../../lib/badgeRules";
+import { getLegacyData, resetWallet } from "@/actions";
+import { BADGES } from "@/lib/badgeRules";
 import { DailyHistory } from "@/models/Core";
-import connectDB from "../../lib/db";
+import connectDB from "@/lib/db";
 
 // Fetch last 7 days (Newest First)
 async function getHistory() {
