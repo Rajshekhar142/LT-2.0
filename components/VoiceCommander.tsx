@@ -1,70 +1,67 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Mic, Send, Keyboard, X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Mic, X, Check } from "lucide-react";
 import { addTask } from "../actions";
 
 export default function VoiceCommander() {
-  const [isOpen, setIsOpen] = useState(false); // Is the panel open?
+  const [isOpen, setIsOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [text, setText] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
   
-  // Ref for the input to auto-focus
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<any>(null);
 
-  // Initialize Speech Logic
-  let recognition: any = null;
-  if (typeof window !== "undefined" && (window as any).webkitSpeechRecognition) {
-    recognition = new (window as any).webkitSpeechRecognition();
-    recognition.continuous = false;
-    recognition.lang = "en-US";
-    recognition.interimResults = true;
-  }
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.lang = "en-US";
+        recognitionRef.current.interimResults = false;
 
-  // --- Voice Handlers ---
-  const startListening = () => {
-    if (!recognition) {
-      // Fallback for iOS/Unsupported browsers: Just open the text box
-      setIsOpen(true);
-      setTimeout(() => inputRef.current?.focus(), 100); // Focus after render
-      return;
+        recognitionRef.current.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setText(transcript);
+          setIsListening(false);
+        };
+
+        recognitionRef.current.onerror = (event: any) => {
+          console.error("Speech error:", event.error);
+          setIsListening(false);
+        };
+        
+        recognitionRef.current.onend = () => {
+             setIsListening(false);
+        };
+      }
     }
+  }, []);
 
+  const startListening = () => {
+    if (!recognitionRef.current) {
+        alert("Voice control not supported in this browser.");
+        return;
+    }
     setIsOpen(true);
     setIsListening(true);
     setText("");
-    recognition.start();
-
-    recognition.onresult = (event: any) => {
-      const current = event.resultIndex;
-      const transcript = event.results[current][0].transcript;
-      setText(transcript);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-      // Auto-focus the text box so user can edit errors immediately
-      inputRef.current?.focus();
-    };
+    try {
+        recognitionRef.current.start();
+    } catch{
+        console.log("Mic already active");
+    }
   };
 
-  // --- Submit Handler ---
-  const handleSend = async () => {
-    if (!text.trim()) return;
-    
-    setIsProcessing(true);
+  const handleProcess = async () => {
+    if (!text) return;
     await addTask(text);
-    
-    // Cleanup
-    setIsProcessing(false);
-    setText("");
     setIsOpen(false);
+    setText("");
   };
 
   return (
     <>
-      {/* 1. The Floating Action Button (FAB) */}
       {!isOpen && (
         <button
           onClick={startListening}
@@ -72,79 +69,55 @@ export default function VoiceCommander() {
             isListening ? "bg-red-500 animate-pulse" : "bg-white"
           }`}
         >
-          {isListening ? (
-            <Mic className="text-white" size={32} />
-          ) : (
-            // Show Mic icon, but it works as a generic "Add" button
-            <Mic className="text-black" size={28} />
-          )}
+          <Mic size={28} className={isListening ? "text-white" : "text-black"} />
         </button>
       )}
 
-      {/* 2. The Input Panel (Replaces the FAB when active) */}
       {isOpen && (
-        <div className="fixed inset-x-0 bottom-0 p-4 z-50 animate-in slide-in-from-bottom-10 duration-200">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-4 shadow-2xl ring-1 ring-white/10">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col justify-end pb-10 px-6 animate-in fade-in duration-200">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-md mx-auto shadow-2xl">
             
-            {/* Header: Status */}
-            <div className="flex justify-between items-center mb-3 px-1">
-              <span className="text-xs font-bold uppercase text-neutral-500 tracking-wider">
-                {isListening ? "Listening..." : "New Task"}
-              </span>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className="text-neutral-500 hover:text-white"
-              >
-                <X size={20} />
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-3">
+                 <div className={`h-3 w-3 rounded-full ${isListening ? "bg-red-500 animate-ping" : "bg-neutral-600"}`} />
+                 <span className="text-sm font-medium text-neutral-400 uppercase tracking-widest">
+                    {isListening ? "Listening..." : "Paused"}
+                 </span>
+              </div>
+              <button onClick={() => setIsOpen(false)} className="p-2 bg-neutral-800 rounded-full text-neutral-400">
+                <X size={18} />
               </button>
             </div>
 
-            {/* The Text Input Area */}
-            <textarea
-              ref={inputRef}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="e.g. Read Book 10 pts Spiritual"
-              className="w-full bg-transparent text-white text-lg font-medium placeholder:text-neutral-700 focus:outline-none resize-none mb-4"
-              rows={2}
-              onKeyDown={(e) => {
-                // Allow Ctrl+Enter to submit
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSend();
-              }}
-            />
+            {/* FIX: Used &quot; instead of raw " to fix lint errors */}
+            <div className="min-h-[120px] flex items-center justify-center text-center p-4">
+               {text ? (
+                 <p className="text-2xl font-medium text-white leading-relaxed">&quot;{text}&quot;</p>
+               ) : (
+                 <p className="text-neutral-600 text-lg italic">Say &quot;Gym Workout 50pts&quot;...</p>
+               )}
+            </div>
 
-            {/* Action Bar */}
-            <div className="flex items-center justify-between">
-              {/* Left: Re-trigger Voice (if supported) */}
+            <div className="grid grid-cols-2 gap-3 mt-4">
               <button 
                 onClick={startListening}
-                className="p-3 rounded-full bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-white transition-colors"
-                title="Restart Voice"
+                className="p-4 rounded-xl bg-neutral-800 text-neutral-300 font-bold hover:bg-neutral-700 transition-colors flex items-center justify-center gap-2"
               >
-                <Mic size={20} />
+                <Mic size={18} /> Retry
               </button>
-
-              {/* Right: Submit Button */}
               <button 
-                onClick={handleSend}
-                disabled={!text.trim() || isProcessing}
-                className="py-3 px-6 rounded-xl bg-white text-black font-bold text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleProcess}
+                disabled={!text}
+                className={`p-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${
+                    text ? "bg-white text-black hover:bg-neutral-200" : "bg-neutral-800 text-neutral-600 cursor-not-allowed"
+                }`}
               >
-                {isProcessing ? "Adding..." : "Add Task"} 
-                {!isProcessing && <Send size={16} />}
+                <Check size={18} /> Add Task
               </button>
             </div>
 
           </div>
         </div>
-      )}
-      
-      {/* Backdrop (Click to close) */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 z-30 backdrop-blur-sm"
-          onClick={() => setIsOpen(false)}
-        />
       )}
     </>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react"; // Removed ChevronUp (we rotate instead)
+import { ChevronDown } from "lucide-react"; 
 import TaskItem from "./TaskItem";
 
 interface DomainSectionProps {
@@ -13,13 +13,20 @@ interface DomainSectionProps {
 export default function DomainSection({ domain, tasks, isLocked }: DomainSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const doneCount = tasks.filter(t => t.isCompleted).length;
-  const totalCount = tasks.length;
-  const domainPoints = tasks.reduce((acc, t) => acc + t.points, 0);
-  const earnedPoints = tasks.filter(t => t.isCompleted).reduce((acc, t) => acc + t.points, 0);
+  // 1. CRITICAL: Filter tasks for THIS domain only
+  const domainTasks = tasks.filter((t: any) => t.domainId === domain._id);
+
+  // 2. Calculate stats based on the filtered list
+  const doneCount = domainTasks.filter(t => t.isCompleted).length;
+  const totalCount = domainTasks.length;
+  const domainPoints = domainTasks.reduce((acc, t) => acc + t.points, 0);
+  const earnedPoints = domainTasks.filter(t => t.isCompleted).reduce((acc, t) => acc + t.points, 0);
+
+  // Auto-hide empty domains if you prefer, or remove this line to show empty ones
+  if (domainTasks.length === 0) return null;
 
   return (
-    <div className="bg-neutral-900/30 border border-neutral-800 rounded-2xl overflow-hidden transition-all duration-300">
+    <div className="bg-neutral-900/30 border border-neutral-800 rounded-2xl overflow-hidden transition-all duration-300 mb-4">
       
       {/* Header */}
       <button 
@@ -27,7 +34,11 @@ export default function DomainSection({ domain, tasks, isLocked }: DomainSection
         className="w-full flex items-center justify-between p-4 hover:bg-neutral-900/50 transition-colors group"
       >
         <div className="flex items-center gap-3">
-          <div className="w-1.5 h-8 rounded-full transition-all group-hover:h-10" style={{ backgroundColor: domain.color }} />
+          {/* Color Indicator */}
+          <div 
+            className="w-1.5 h-8 rounded-full transition-all group-hover:h-10" 
+            style={{ backgroundColor: domain.color || "#525252" }} 
+          />
           
           <div className="text-left">
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">
@@ -53,21 +64,13 @@ export default function DomainSection({ domain, tasks, isLocked }: DomainSection
           <div className="p-3 pt-0">
             <div className="h-px bg-neutral-800 w-full mb-3" />
             
-            {tasks.map((task) => (
+            {/* 3. Render filtered tasks */}
+            {domainTasks.map((task) => (
               <TaskItem 
                 key={task._id}
-                id={task._id}
-                title={task.title}
-                points={task.points}
-                color={domain.color}
-                isCompleted={task.isCompleted}
-                isLocked={isLocked}
+                task={task} // <--- FIX: Passing the single 'task' object
               />
             ))}
-            
-            {tasks.length === 0 && (
-              <p className="text-xs text-neutral-600 text-center py-2 italic">No tasks yet.</p>
-            )}
           </div>
         </div>
       </div>

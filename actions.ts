@@ -68,7 +68,7 @@ export async function getData() {
   const lastHistory = await DailyHistory.findOne().sort({ dateString: -1 });
   
   // Start checking from the day AFTER the last history, OR from 30 days ago
-  let checkDate = lastHistory 
+  const checkDate = lastHistory 
     ? new Date(new Date(lastHistory.dateString).getTime() + 86400000) 
     : new Date(Date.now() - (30 * 86400000));
 
@@ -237,7 +237,7 @@ export async function addTask(text: string) {
   let targetDomain = domains.find((d: any) => lowerText.includes(d.name.toLowerCase()));
   if (!targetDomain) targetDomain = domains[0]; 
 
-  let cleanTitle = text
+  const cleanTitle = text
     .replace(new RegExp(`${points}\\s*(?:pt|point|pts)[s]?`, 'gi'), "") 
     .replace(new RegExp(targetDomain?.name || "", 'gi'), "") 
     .trim();
@@ -256,7 +256,7 @@ export async function toggleLock() {
   await connectDB();
   const today = getTodayDateString();
   
-  let settings = await GameSettings.findOne({ userEmail: "me" });
+  const settings = await GameSettings.findOne({ userEmail: "me" });
   
   if (!settings) {
     await GameSettings.create({ userEmail: "me", isLocked: true, lockDate: today });

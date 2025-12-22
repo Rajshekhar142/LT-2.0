@@ -1,4 +1,4 @@
-import { LucideIcon, Flame, Dumbbell, Wallet, Brain, Heart, Zap, Award } from "lucide-react";
+import { Flame, Dumbbell, Wallet, Brain, Zap, Award } from "lucide-react";
 
 export type BadgeDef = {
   id: string;
