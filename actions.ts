@@ -223,34 +223,6 @@ export async function resetWallet() {
   revalidatePath("/legacy");
 }
 
-export async function addTask(text: string) {
-  await connectDB();
-  const lowerText = text.toLowerCase();
-  
-  // Parse Points
-  const pointsMatch = lowerText.match(/(\d+)\s*(?:pt|point|pts)/);
-  const points = pointsMatch ? parseInt(pointsMatch[1]) : 1; 
-
-  const domains = await Domain.find({ isActive: true }).lean();
-  
-  // Parse Domain
-  let targetDomain = domains.find((d: any) => lowerText.includes(d.name.toLowerCase()));
-  if (!targetDomain) targetDomain = domains[0]; 
-
-  const cleanTitle = text
-    .replace(new RegExp(`${points}\\s*(?:pt|point|pts)[s]?`, 'gi'), "") 
-    .replace(new RegExp(targetDomain?.name || "", 'gi'), "") 
-    .trim();
-
-  await Task.create({
-    domainId: targetDomain?._id,
-    title: cleanTitle || "New Task", 
-    points: points,
-    isActive: true
-  });
-  revalidatePath("/");
-  return { success: true };
-}
 
 export async function toggleLock() {
   await connectDB();
@@ -269,8 +241,51 @@ export async function toggleLock() {
   revalidatePath("/");
 }
 
+export async function addTask(text: string) {
+  await connectDB();
+  const today = getTodayDateString();
+  
+  // 1. SECURITY CHECK: Is the day locked?
+  const settings = await GameSettings.findOne({ userEmail: "me" });
+  if (settings?.isLocked && settings?.lockDate === today) {
+    return { success: false, message: "Day is locked" };
+  }
+
+  // ... (Rest of the existing logic)
+  const lowerText = text.toLowerCase();
+  const pointsMatch = lowerText.match(/(\d+)\s*(?:pt|point|pts)/);
+  const points = pointsMatch ? parseInt(pointsMatch[1]) : 1; 
+
+  const domains = await Domain.find({ isActive: true }).lean();
+  let targetDomain = domains.find((d: any) => lowerText.includes(d.name.toLowerCase()));
+  if (!targetDomain) targetDomain = domains[0]; 
+
+  let cleanTitle = text
+    .replace(new RegExp(`${points}\\s*(?:pt|point|pts)[s]?`, 'gi'), "") 
+    .replace(new RegExp(targetDomain?.name || "", 'gi'), "") 
+    .trim();
+
+  await Task.create({
+    domainId: targetDomain?._id,
+    title: cleanTitle || "New Task", 
+    points: points,
+    isActive: true
+  });
+  revalidatePath("/");
+  return { success: true };
+}
+
 export async function deleteTask(taskId: string) {
   await connectDB();
+  const today = getTodayDateString();
+
+  // 1. SECURITY CHECK: Prevent deletion if locked
+  const settings = await GameSettings.findOne({ userEmail: "me" });
+  if (settings?.isLocked && settings?.lockDate === today) {
+    // Silently fail or return. The UI will hide the button anyway.
+    return;
+  }
+
   await Task.findByIdAndDelete(taskId);
   await TaskLog.deleteMany({ taskId });
   revalidatePath("/");

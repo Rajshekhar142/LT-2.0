@@ -57,6 +57,7 @@ export default function DomainSection({ domain, tasks, isLocked }: DomainSection
       </button>
 
       {/* The Smooth Grid Animation Trick */}
+     {/* Task List */}
       <div 
         className={`grid transition-[grid-template-rows] duration-300 ease-out ${isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
       >
@@ -64,13 +65,15 @@ export default function DomainSection({ domain, tasks, isLocked }: DomainSection
           <div className="p-3 pt-0">
             <div className="h-px bg-neutral-800 w-full mb-3" />
             
-            {/* 3. Render filtered tasks */}
             {domainTasks.map((task) => (
               <TaskItem 
                 key={task._id}
-                task={task} // <--- FIX: Passing the single 'task' object
+                task={task} 
+                isLocked={isLocked} // <--- PASS IT HERE
               />
             ))}
+            
+            {/* ... */}
           </div>
         </div>
       </div>

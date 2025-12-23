@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Mic, X, Check } from "lucide-react";
-import { addTask } from "../actions";
+import { addTask } from "../actions"; // Ensure this points to your actions file using @/
 
 export default function VoiceCommander() {
   const [isOpen, setIsOpen] = useState(false);
@@ -18,7 +18,7 @@ export default function VoiceCommander() {
         recognitionRef.current = new SpeechRecognition();
         recognitionRef.current.continuous = false;
         recognitionRef.current.lang = "en-US";
-        recognitionRef.current.interimResults = false;
+        recognitionRef.current.interimResults = false; // Set to true if you want to see words appear as you speak
 
         recognitionRef.current.onresult = (event: any) => {
           const transcript = event.results[0][0].transcript;
@@ -45,10 +45,12 @@ export default function VoiceCommander() {
     }
     setIsOpen(true);
     setIsListening(true);
-    setText("");
+    // Optional: clear text on new listen, or keep it to append? 
+    // Usually clearing is better for a command interface.
+    setText(""); 
     try {
         recognitionRef.current.start();
-    } catch{
+    } catch {
         console.log("Mic already active");
     }
   };
@@ -77,7 +79,8 @@ export default function VoiceCommander() {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col justify-end pb-10 px-6 animate-in fade-in duration-200">
           <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-md mx-auto shadow-2xl">
             
-            <div className="flex justify-between items-center mb-6">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-3">
                  <div className={`h-3 w-3 rounded-full ${isListening ? "bg-red-500 animate-ping" : "bg-neutral-600"}`} />
                  <span className="text-sm font-medium text-neutral-400 uppercase tracking-widest">
@@ -89,15 +92,19 @@ export default function VoiceCommander() {
               </button>
             </div>
 
-            {/* FIX: Used &quot; instead of raw " to fix lint errors */}
-            <div className="min-h-[120px] flex items-center justify-center text-center p-4">
-               {text ? (
-                 <p className="text-2xl font-medium text-white leading-relaxed">&quot;{text}&quot;</p>
-               ) : (
-                 <p className="text-neutral-600 text-lg italic">Say &quot;Gym Workout 50pts&quot;...</p>
-               )}
+            {/* EDITABLE TEXT AREA */}
+            <div className="min-h-[120px] flex items-center justify-center p-2">
+               <textarea
+                 value={text}
+                 onChange={(e) => setText(e.target.value)}
+                 placeholder={isListening ? "Listening..." : "Say \"Gym Workout 50pts\"..."}
+                 className="w-full bg-transparent text-2xl font-medium text-white text-center outline-none resize-none placeholder:text-neutral-600 placeholder:italic leading-relaxed"
+                 rows={3}
+                 // Auto-focus logic can be tricky with voice, so we let the user click to edit
+               />
             </div>
 
+            {/* Actions */}
             <div className="grid grid-cols-2 gap-3 mt-4">
               <button 
                 onClick={startListening}
