@@ -7,7 +7,6 @@ import { Domain, Task, TaskLog, GameSettings, DailyHistory } from "@/models/Core
 import { BADGES } from "@/lib/badgeRules";
 
 // --- HELPER: Global Date Source of Truth ---
-// Returns "YYYY-MM-DD" based on UTC (which is 5:30 AM IST)
 function getTodayDateString() {
   return new Date().toISOString().split("T")[0];
 }
@@ -22,7 +21,6 @@ function getYesterdayDateString() {
 function calculateStreak(logs: any[]) {
   if (!logs.length) return 0;
   
-  // Get unique dates sorted descending
   const uniqueDates = Array.from(new Set(logs.map((l: any) => l.dateString))).sort().reverse();
   const today = getTodayDateString();
   const yesterday = getYesterdayDateString();
@@ -30,16 +28,14 @@ function calculateStreak(logs: any[]) {
   let streak = 0;
   let currentCheck = today;
 
-  // If no log today, check if streak is alive from yesterday
   if (!uniqueDates.includes(today)) {
     if (uniqueDates.includes(yesterday)) {
       currentCheck = yesterday;
     } else {
-      return 0; // Streak broken
+      return 0; 
     }
   }
 
-  // Count backwards
   for (const date of uniqueDates) {
     if (date === currentCheck) {
       streak++;
@@ -53,7 +49,7 @@ function calculateStreak(logs: any[]) {
 
 // --- MAIN: Fetch App Data ---
 export async function getData() {
-  noStore(); // Force fresh data
+  noStore(); 
   await connectDB();
   
   const today = getTodayDateString();
@@ -64,23 +60,19 @@ export async function getData() {
     settings = await GameSettings.create({ userEmail: "me", isLocked: false, lockDate: today });
   }
 
-  // 2. HISTORY SYNC LOOP (Fixes "Missing Past Performance")
+  // 2. HISTORY SYNC LOOP
   const lastHistory = await DailyHistory.findOne().sort({ dateString: -1 });
-  
-  // Start checking from the day AFTER the last history, OR from 30 days ago
   const checkDate = lastHistory 
     ? new Date(new Date(lastHistory.dateString).getTime() + 86400000) 
     : new Date(Date.now() - (30 * 86400000));
 
-  // Loop until we reach Today (exclusive)
   while (checkDate.toISOString().split("T")[0] < today) {
     const dateStr = checkDate.toISOString().split("T")[0];
-    
     const exists = await DailyHistory.findOne({ dateString: dateStr });
     
     if (!exists) {
       const logs = await TaskLog.find({ dateString: dateStr }).lean();
-      const points = logs.reduce((acc: number, l: any) => acc + l.pointsEarned, 0);
+      const points = logs.reduce((acc: number, l: any) => acc + (l.pointsEarned || 0), 0); // Added safety check
       const count = logs.length;
 
       await DailyHistory.create({
@@ -93,7 +85,7 @@ export async function getData() {
     checkDate.setDate(checkDate.getDate() + 1);
   }
 
-  // 3. Auto-Unlock if date changed
+  // 3. Auto-Unlock
   if (settings.lockDate !== today) {
      settings.isLocked = false;
      settings.lockDate = today;
@@ -108,7 +100,6 @@ export async function getData() {
     GameSettings.findOne({ userEmail: "me" }).lean()
   ]);
 
-  // FIX: Type Casting to prevent errors
   const settingsObj = finalSettings as any;
   const isLocked = settingsObj?.isLocked === true && settingsObj?.lockDate === today;
 
@@ -156,9 +147,7 @@ export async function getLegacyData() {
       if (currentStreak >= badge.threshold) qualified = true;
     } 
     else if (badge.type === "domain_tasks") {
-      // FIX: Type Casting
       const domain = domains.find((d: any) => d.name === badge.domainName) as any;
-      
       if (domain) {
         const domainTaskIds = tasks
             .filter((t: any) => t.domainId.toString() === domain._id.toString())
@@ -194,6 +183,7 @@ export async function getLegacyData() {
 
 // --- ACTIONS ---
 
+// 1. SIMPLE TOGGLE (Old Checkbox Way)
 export async function toggleTask(taskId: string, points: number) {
   await connectDB();
   const today = getTodayDateString();
@@ -208,7 +198,13 @@ export async function toggleTask(taskId: string, points: number) {
        await settings.save();
     }
   } else {
-    await TaskLog.create({ taskId, dateString: today, pointsEarned: points });
+    // Basic completion without Feynman check
+    await TaskLog.create({ 
+      taskId, 
+      dateString: today, 
+      pointsEarned: points,
+      userEmail: "me" // Added for safety
+    });
     if (settings) {
        settings.walletBalance = (settings.walletBalance || 0) + points;
        await settings.save();
@@ -217,12 +213,68 @@ export async function toggleTask(taskId: string, points: number) {
   revalidatePath("/");
 }
 
+// 2. THE PHYSICS ENGINE (New "Deep Work" Completion)
+// This calculates points based on Time * Difficulty * Recall
+export async function completeSession(
+  taskId: string, 
+  data: {
+    actualDuration: number;   
+    difficulty: number;       
+    resistanceLevel: number;  
+    feynmanReflection: string;
+    recallAccuracy: number;   
+  }
+) {
+  await connectDB();
+  const today = getTodayDateString();
+
+  // A. CALCULATE WEIGHTED UNITS (WU)
+  let wu = data.actualDuration * data.difficulty * data.recallAccuracy;
+
+  // Resistance Bonus (Triple score if urge to quit was high)
+  if (data.resistanceLevel >= 8) {
+    wu = wu * 3;
+  }
+
+  const finalPoints = Math.round(wu);
+
+  // B. UPDATE TASK METADATA
+  // We explicitly DO NOT "toggle" here. A session completion is final.
+  await Task.findByIdAndUpdate(taskId, {
+    points: finalPoints, // Overwrite estimated points with actual WU
+    
+    // Save the Metadata
+    actualDuration: data.actualDuration,
+    difficulty: data.difficulty,
+    resistanceLevel: data.resistanceLevel,
+    feynmanReflection: data.feynmanReflection,
+    recallAccuracy: data.recallAccuracy
+  });
+
+  // C. LOG IT (For Badges & History)
+  await TaskLog.create({
+    userEmail: "me",
+    taskId: taskId,
+    dateString: today,
+    pointsEarned: finalPoints,
+    completedAt: new Date()
+  });
+
+  // D. PAY THE USER
+  await GameSettings.findOneAndUpdate(
+    { userEmail: "me" },
+    { $inc: { walletBalance: finalPoints } }
+  );
+
+  revalidatePath("/");
+  revalidatePath("/legacy");
+}
+
 export async function resetWallet() {
   await connectDB();
   await GameSettings.findOneAndUpdate({ userEmail: "me" }, { walletBalance: 0 });
   revalidatePath("/legacy");
 }
-
 
 export async function toggleLock() {
   await connectDB();
@@ -245,13 +297,11 @@ export async function addTask(text: string) {
   await connectDB();
   const today = getTodayDateString();
   
-  // 1. SECURITY CHECK: Is the day locked?
   const settings = await GameSettings.findOne({ userEmail: "me" });
   if (settings?.isLocked && settings?.lockDate === today) {
     return { success: false, message: "Day is locked" };
   }
 
-  // ... (Rest of the existing logic)
   const lowerText = text.toLowerCase();
   const pointsMatch = lowerText.match(/(\d+)\s*(?:pt|point|pts)/);
   const points = pointsMatch ? parseInt(pointsMatch[1]) : 1; 
@@ -268,9 +318,13 @@ export async function addTask(text: string) {
   await Task.create({
     domainId: targetDomain?._id,
     title: cleanTitle || "New Task", 
-    points: points,
-    isActive: true
+    points: points, // This is now just an "Estimate"
+    isActive: true,
+    // Defaults for new physics fields
+    difficulty: 2, 
+    resistanceLevel: 0
   });
+  
   revalidatePath("/");
   return { success: true };
 }
@@ -279,10 +333,8 @@ export async function deleteTask(taskId: string) {
   await connectDB();
   const today = getTodayDateString();
 
-  // 1. SECURITY CHECK: Prevent deletion if locked
   const settings = await GameSettings.findOne({ userEmail: "me" });
   if (settings?.isLocked && settings?.lockDate === today) {
-    // Silently fail or return. The UI will hide the button anyway.
     return;
   }
 
